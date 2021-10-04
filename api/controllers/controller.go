@@ -46,11 +46,6 @@ type JsonResponse struct {
 
 var jwtKey = []byte("secret_key")
 
-var users = map[string]string{
-	"user1": "password1",
-	"user2": "password2",
-}
-
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -62,6 +57,7 @@ type Claims struct {
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
+	db := createConnection()
 	var credentials Credentials
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
@@ -69,13 +65,18 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expectedPassword, ok := users[credentials.Username]
+	st := `select password from credentials where username = $1`
 
-	if !ok || expectedPassword != credentials.Password {
+	row, _ := db.Query(st, credentials.Username)
+	var cred Credentials
+	for row.Next() {
+		row.Scan(&cred.Password)
+	}
+	defer row.Close()
+	if cred.Password != credentials.Password {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-
 	expirationTime := time.Now().Add(time.Minute * 5)
 
 	claims := &Claims{
